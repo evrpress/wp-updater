@@ -2,7 +2,7 @@
 
 namespace EverPress;
 
-die('HERE');
+die('HERE!!!');
 
 if ( class_exists( __NAMESPACE__ . '\Updater' ) ) {
 	return;
