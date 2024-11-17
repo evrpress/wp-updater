@@ -2,6 +2,8 @@
 
 namespace EverPress;
 
+die('HERE');
+
 if ( class_exists( __NAMESPACE__ . '\Updater' ) ) {
 	return;
 }
