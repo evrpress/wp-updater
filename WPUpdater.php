@@ -2,7 +2,7 @@
 
 namespace EverPress;
 
-class Updater {
+class WPUpdater {
 
 	private static $instance = null;
 	private $username;
