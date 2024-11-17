@@ -3,6 +3,6 @@
     "version": "0.1.0",
 	"description": "A small helper for Wordpress plugins",
     "autoload": {
-       "files": ["./MyUpdater.php"]
+       "files": ["./Updater.php"]
     }
 }
