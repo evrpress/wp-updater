@@ -2,7 +2,7 @@
 
 namespace EverPress;
 
-class MyUpdater {
+class Updater {
 
 	private static $instance = null;
 	private $username;
