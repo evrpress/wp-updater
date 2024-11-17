@@ -1,5 +1,7 @@
 <?php
 
+namespace EverPress;
+
 class MyUpdater {
 
 	private static $instance = null;
