@@ -1,8 +1,8 @@
 {
 	"name": "evrpress/wp-updater",
-    "version": "0.1.0",
+    "version": "0.1.1",
 	"description": "A small helper for Wordpress plugins",
     "autoload": {
-       "files": ["wp-updater.php"]
-    },
+       "files": ["./WPUpdater.php"]
+    }
 }
