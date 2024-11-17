@@ -32,8 +32,6 @@ class WPUpdater {
 
 	public function check_for_update( $transient ) {
 
-		error_log( print_r( __FUNCTION__, true ) );
-
 		if ( empty( $transient->checked[ $this->plugin_slug ] ) ) {
 			return $transient;
 		}
@@ -142,28 +140,34 @@ class WPUpdater {
 
 		$url = "https://api.github.com/repos/{$this->username}/{$this->repository}/releases/latest";
 
-		$response = wp_remote_get( $url );
-
-		if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
-			return false;
-		}
-
-		$body = json_decode( wp_remote_retrieve_body( $response ) );
-
-		return $body;
+		return $this->cached_request( $url );
+		
 	}
 
 	private function get_repo() {
 
 		$url = "https://api.github.com/repos/{$this->username}/{$this->repository}";
 
-		$response = wp_remote_get( $url );
+		return $this->cached_request( $url );
+	}
+
+	public function cached_request( $url, $headers = array() ) {
+		$cache_key = 'evp_update_' . md5( $url ) . md5( serialize( $headers ) );
+		$cache     = get_transient( $cache_key );
+
+		if ( $cache ) {
+			return $cache;
+		}
+
+		$response = wp_remote_get( $url, $headers );
 
 		if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
 			return false;
 		}
 
 		$body = json_decode( wp_remote_retrieve_body( $response ) );
+
+		set_transient( $cache_key, $body, MINUTE_IN_SECONDS * 3);
 
 		return $body;
 	}
