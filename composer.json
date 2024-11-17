@@ -4,5 +4,5 @@
 	"description": "A small helper for Wordpress plugins",
     "autoload": {
        "files": ["wp-updater.php"]
-    },
+    }
 }
