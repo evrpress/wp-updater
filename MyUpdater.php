@@ -1,14 +1,6 @@
 <?php
 
-namespace EverPress;
-
-die('HERE!!!!!!');
-
-if ( class_exists( __NAMESPACE__ . '\Updater' ) ) {
-	return;
-}
-
-class Updater {
+class MyUpdater {
 
 	private static $instance = null;
 	private $username;
