@@ -22,7 +22,7 @@ class WPUpdater {
 		add_filter( 'upgrader_source_selection', array( $this, 'rename_github_zip' ), 10, 3 );
 	}
 
-	public static function get_instance( $args ) {
+	public static function add( $args ) {
 		if ( self::$instance === null ) {
 			self::$instance = new self( $args );
 		}
