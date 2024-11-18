@@ -6,6 +6,7 @@ if ( class_exists( 'EverPress\WPUpdater' ) ) {
 	return;
 }
 
+
 class WPUpdater {
 
 	private static $instance = null;
@@ -29,24 +30,84 @@ class WPUpdater {
 			if ( isset( self::$plugins[ $slug ] ) ) {
 				_doing_it_wrong( __METHOD__, 'Plugin already registered', '1.0' );
 			} else {
-				self::$plugins[ $slug ] = $args;
+				self::$plugins[ $slug ] = wp_parse_args( $args, self::default_args() );
+				register_activation_hook( $slug, array( self::$instance, 'register_activation_hook' ) );
+				register_deactivation_hook( $slug, array( self::$instance, 'register_deactivation_hook' ) );
 			}
 		}
 
 		return self::$instance;
 	}
 
+	public static function register_deactivation_hook() {
+		$slug = str_replace( 'deactivate_', '', current_filter() );
+	}
+
+	public static function register_activation_hook( $network_wide ) {
+
+		$slug = str_replace( 'activate_', '', current_filter() );
+		// needs to be static
+		register_uninstall_hook( WP_PLUGIN_DIR . '/' . $slug, array( __CLASS__, 'register_uninstall_hook' ) );
+	}
+
+	public static function register_uninstall_hook() {
+
+		$slug = str_replace( 'uninstall_', '', current_filter() );
+
+		// cleanup
+		$options = get_option( 'wp_updater_plugins', array() );
+
+		if ( isset( $options[ $slug ] ) ) {
+			unset( $options[ $slug ] );
+		}
+
+		if ( empty( $options ) ) {
+			delete_option( 'wp_updater_plugins' );
+		} else {
+			update_option( 'wp_updater_plugins', $options, false );
+		}
+	}
+
+	private static function default_args() {
+		return array( 'readme' => 'README.md' );
+	}
+
 
 	private function get_plugin_args( $slug ) {
 
-		$options = get_option( 'evp_plugin_args', array() );
+		$options = get_option( 'wp_updater_plugins', array() );
 
 		if ( ! isset( $options[ $slug ] ) ) {
 			$options[ $slug ] = array();
+		} else {
+			// check if the data is still valid
+			if ( isset( $options[ $slug ]['_last_updated'] ) && $options[ $slug ]['_last_updated'] > strtotime( '5 min' ) ) {
+				return $options[ $slug ];
+			}
 		}
 
 		$plugin_file = WP_PLUGIN_DIR . '/' . $slug;
 		$plugin_data = get_plugin_data( $plugin_file );
+
+		// fetching data from github
+		$repo        = $this->get_repo( $slug );
+		$readme      = $this->get_readme( $slug );
+		$remote_info = $this->get_remote_info( $slug );
+
+		// get the package
+		$package = $remote_info->zipball_url;
+
+		// preferable from the asstes
+		if ( isset( $remote_info->assets ) ) {
+			foreach ( $remote_info->assets as $asset ) {
+				// must be a zip file
+				// TODO: check if the the file is the right one
+				if ( $asset->content_type === 'application/octet-stream' ) {
+					$package = $asset->browser_download_url;
+					break;
+				}
+			}
+		}
 
 		$assets  = $this->get_assets( $slug );
 		$icons   = array();
@@ -61,14 +122,28 @@ class WPUpdater {
 			}
 		}
 
-		$args             = array(
-			'version' => $plugin_data['Version'],
-			'icons'   => $icons,
-			'banners' => $banners,
+		$args = array(
+			'_last_updated'  => time(),
+			'name'           => $plugin_data['Name'],
+			'version'        => $plugin_data['Version'],
+			'author'         => $repo->owner->login,
+			'homepage'       => $repo->html_url,
+			'author_profile' => $repo->homepage,
+			'new_version'    => $remote_info->tag_name,
+			'last_updated'   => $repo->updated_at,
+			'added'          => $repo->created_at,
+			'package'        => $package,
+			'icons'          => $icons,
+			'banners'        => $banners,
+			'changelog'      => $remote_info->body,
+			'url'            => $remote_info->html_url,
+			'readme'         => $readme,
+
 		);
+
 		$options[ $slug ] = $args;
 
-		update_option( 'evp_plugin_args', $options );
+		update_option( 'wp_updater_plugins', $options, false );
 
 		return $options[ $slug ];
 	}
@@ -88,34 +163,16 @@ class WPUpdater {
 			}
 
 			$plugin_args = $this->get_plugin_args( $slug );
-			$remote_info = $this->get_remote_info( $slug );
 
-			if ( $remote_info && version_compare( $plugin_args['version'], $remote_info->tag_name, '<' ) ) {
-				$repo = $this->get_repo( $slug );
-
-				// get the package
-				$package = $remote_info->zipball_url;
-
-				// preferable from the asstes
-				if ( isset( $remote_info->assets ) ) {
-					foreach ( $remote_info->assets as $asset ) {
-						// must be a zip file
-						// TODO: check if the the file is the right one
-						if ( $asset->content_type === 'application/octet-stream' ) {
-							$package = $asset->browser_download_url;
-							break;
-						}
-					}
-				}
+			if ( $plugin_args && version_compare( $plugin_args['version'], $plugin_args['new_version'], '<' ) ) {
 
 				// https://github.com/WordPress/wordpress-develop/blob/2e5e2131a145e593173a7b2c57fb84fa93deabba/src/wp-admin/update-core.php#L514
 
 				$plugin_data = array(
-					'id'             => $remote_info->id, // maybe optional
 					'slug'           => $slug,
-					'new_version'    => $remote_info->tag_name,
-					'url'            => $remote_info->html_url,
-					'package'        => $package,
+					'new_version'    => $plugin_args['new_version'],
+					'url'            => $plugin_args['url'],
+					'package'        => $plugin_args['package'],
 					'upgrade_notice' => 'Upgrade to the latest version for new features and bugfixes.',
 					'requires'       => '5.8',
 					'icons'          => $plugin_args['icons'],
@@ -126,6 +183,7 @@ class WPUpdater {
 					),
 
 				);
+
 				$transient->response[ $slug ] = (object) $plugin_data;
 
 			}
@@ -146,58 +204,43 @@ class WPUpdater {
 				continue;
 			}
 
-			$remote_info = $this->get_remote_info( $slug );
-			if ( ! $remote_info ) {
-				continue;
-			}
-
-			$repo = $this->get_repo( $slug );
-			if ( ! $repo ) {
-				continue;
-			}
-
 			$plugin_args = $this->get_plugin_args( $slug );
 
-			error_log( print_r( $plugin_args, true ) );
+			$section = wp_parse_args( $plugin_args['readme']['sections'], array() );
 
 			// from https://github.com/WordPress/wordpress-develop/blob/412658097d7a71f16a4662f5a23cfed067b356d0/src/wp-admin/includes/plugin-install.php#L10
 			$result = (object) array(
 
-				'name'            => $repo->name,
+				'name'           => $plugin_args['name'],
 
 				// 'description'       => $repo->description,
 				// 'short_description' => $repo->description,
-				'slug'            => $slug,
-				'version'         => $remote_info->tag_name,
-				'author'          => $repo->owner->login,
-				'homepage'        => $repo->html_url,
-				'author_profile'  => $repo->homepage,
-				'download_link'   => $remote_info->zipball_url,
-				'sections'        => array(
-					'description' => wpautop( $remote_info->body ),
-					'github'      => wpautop( $remote_info->body ),
-				),
-				'banners'         => $plugin_args['banners'],
-				'icons'           => array(
-					'default' => 'https://via.placeholder.com/128x128',
-					'2x'      => 'https://via.placeholder.com/256x256',
-				),
-				'rating'          => 86,
-				'ratings'         => true,
+				'slug'           => $slug,
+				'version'        => $plugin_args['version'],
+				'author'         => $plugin_args['author'],
+				'homepage'       => $plugin_args['homepage'],
+				'author_profile' => $plugin_args['author_profile'],
+				'download_link'  => $plugin_args['package'],
+				'sections'       => $section,
+				'banners'        => $plugin_args['banners'],
+				// 'icons'           => false,
+				// 'rating'          => 86,
+				// 'ratings'         => true,
 				// 'versions'        => array(),
-				'donate_link'     => 'https://www.paypal.com',
-				'last_updated'    => $repo->updated_at,
-				'added'           => $repo->created_at,
-				'active_installs' => 1000,
+				// 'donate_link'     => 'https://www.paypal.com',
+				'last_updated'   => $plugin_args['last_updated'],
+				'added'          => $plugin_args['added'],
+
+				// 'active_installs' => 1000,
 				// 'contributors'    => 'asdf',
 
-				'upgrade_notice'  => 'Upgrade to the latest version for new features and bugfixes.',
+				// 'upgrade_notice'  => 'Upgrade to the latest version for new features and bugfixes.',
 
-				'num_ratings'     => 1825,
-				'support_threads' => 10,
-				'tested'          => '6.7',
-				'requires_php'    => '7.4',
-				'requires'        => '5.8',
+				// 'num_ratings'     => 1825,
+				// 'support_threads' => 10,
+				'tested'         => $plugin_args['readme']['tested'],
+				'requires_php'   => $plugin_args['readme']['requires_php'],
+				'requires'       => $plugin_args['readme']['requires'],
 
 			);
 
@@ -208,29 +251,55 @@ class WPUpdater {
 
 	private function get_remote_info( $slug ) {
 
-		$plugin_args = self::$plugins[ $slug ];
+		$plugin = self::$plugins[ $slug ];
 
-		$url = sprintf( 'https://api.github.com/repos/%s/%s/releases/latest', $plugin_args['username'], $plugin_args['repository'] );
+		$url = sprintf( 'https://api.github.com/repos/%s/%s/releases/latest', $plugin['username'], $plugin['repository'] );
 
 		return $this->request( $url );
 	}
 
 	private function get_repo( $slug ) {
 
-		$plugin_args = self::$plugins[ $slug ];
+		$plugin = self::$plugins[ $slug ];
 
-		$url = sprintf( 'https://api.github.com/repos/%s/%s', $plugin_args['username'], $plugin_args['repository'] );
+		$url = sprintf( 'https://api.github.com/repos/%s/%s', $plugin['username'], $plugin['repository'] );
 
 		return $this->request( $url );
 	}
 
 	private function get_assets( $slug ) {
 
-		$plugin_args = self::$plugins[ $slug ];
+		$plugin = self::$plugins[ $slug ];
 
-		$url = sprintf( 'https://api.github.com/repos/%s/%s/contents/.wordpress-org/', $plugin_args['username'], $plugin_args['repository'] );
+		$url = sprintf( 'https://api.github.com/repos/%s/%s/contents/.wordpress-org/', $plugin['username'], $plugin['repository'] );
 
 		return $this->request( $url, array(), HOUR_IN_SECONDS * 3 );
+	}
+
+	private function get_readme( $slug ) {
+
+		$plugin = self::$plugins[ $slug ];
+
+		$url = sprintf( 'https://api.github.com/repos/%s/%s/contents/README.md', $plugin['username'], $plugin['repository'] );
+
+		$response = $this->request( $url, array(), HOUR_IN_SECONDS * 3 );
+
+		if ( is_wp_error( $response ) ) {
+			$url      = sprintf( 'https://api.github.com/repos/%s/%s/contents/readme.txt', $plugin['username'], $plugin['repository'] );
+			$response = $this->request( $url, array(), HOUR_IN_SECONDS * 3 );
+		}
+
+		if ( ! $response ) {
+			return false;
+		}
+
+		$data = base64_decode( $response->content );
+
+		include_once __DIR__ . '/ReadmeParser.php';
+
+		$parser = \EverPress\ReadmeParser::parse( $data );
+
+		return $parser->get_data();
 	}
 
 	private function request( $url, $headers = array(), $expiration = HOUR_IN_SECONDS ) {
