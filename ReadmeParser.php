@@ -117,8 +117,8 @@ class ReadmeParser {
 				if ( ! isset( $sections[ $key ] ) ) {
 					$sections[ $key ] = '';
 				}
-				
-				$sections[ $key ] .= "\n\n" . trim( $content );
+
+				$sections[ $key ] .= "\n\n" . '<h1>' . esc_html( $name ) . '</h1>' . trim( $content );
 			}
 		}
 		return $sections;
