@@ -1,5 +1,6 @@
 <?php
 
+
 namespace EverPress;
 
 if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
@@ -92,15 +93,12 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			// check if the data is still valid
 			if ( isset( $options[ $slug ]['last_updated'] ) && time() - $options[ $slug ]['last_updated'] < 60 ) {
 
-				// $options[ $slug ] = wp_parse_args( $plugin, $options[ $slug ] );
-
 				return $options[ $slug ];
 			}
 
 			$old_data = $options[ $slug ];
 
 			// basic info should be always there (offline)
-
 			$plugin_data = $this->get_plugin_data( $slug );
 
 			$update_info = array(
@@ -170,7 +168,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			// new version available or not clear yet
-			if ( ! $update_info['new_version'] || version_compare( $update_info['version'], $update_info['new_version'], '<' ) ) {
+			if ( ! isset( $update_info['new_version'] ) || version_compare( $update_info['version'], $update_info['new_version'], '<' ) ) {
 				$readme = $this->get_readme( $slug );
 			} else {
 				$readme = $this->get_local_readme( $slug );
@@ -304,7 +302,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$update_info = $plugin_args['update_info'];
 
 			// new version available or not clear yet
-			if ( ! $update_info['new_version'] || version_compare( $update_info['version'], $update_info['new_version'], '<' ) ) {
+			if ( ! isset( $update_info['new_version'] ) || version_compare( $update_info['version'], $update_info['new_version'], '<' ) ) {
 				$readme = $this->get_readme( $args->slug );
 			} else {
 				$readme = $this->get_local_readme( $args->slug );
@@ -522,7 +520,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// error_log( $response->get_error_message() );
 				}
-				$this->set_plugin_arg( $slug, 'last_error', $response->get_error_message() );
+				// $this->set_plugin_arg( $slug, 'last_error', $response->get_error_message() );
 				return false;
 			}
 
@@ -532,12 +530,24 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			if ( $code !== 200 ) {
 
 				if ( $code === 403 ) {
+					$headers = wp_remote_retrieve_headers( $response );
+					// check for rate limit
+					$reset = $headers['x-ratelimit-reset'];
+
+					error_log( print_r( $reset, true ) );
+					error_log( print_r( $reset - time(), true ) );
 					set_transient( 'evp_update_rate_limit', true, 60 );
 				}
 
 				$this->set_plugin_arg( $slug, 'last_error', $body->message );
 
-				// error_log( print_r( $response, true ) );
+				// $options = get_option( 'wp_updater_plugins', array() );
+
+				// $options[ $slug ]['last_error'] = $body->message;
+
+				// update_option( 'wp_updater_plugins', $options, false );
+
+
 				wp_admin_notice(
 					'WP Updater Error: ' . $body->message . '<br>' . $body->documentation_url,
 					array( 'type' => 'error' )
