@@ -458,7 +458,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$response = $this->request( $url, array(), HOUR_IN_SECONDS * 3, $slug );
 
 			if ( ! $response ) {
-				return false;
+				return $this->get_local_readme( $slug );
 			}
 
 			$data = base64_decode( $response->content );
@@ -475,9 +475,12 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				$data = file_get_contents( $folder . '/README.md' );
 				return $this->parse_readme( $data );
 			}
+			if ( file_exists( $folder . '/readme.txt' ) ) {
+				$data = file_get_contents( $folder . '/readme.txt' );
+				return $this->parse_readme( $data );
+			}
 
-			$data = file_get_contents( $folder . '/readme.txt' );
-			return $this->parse_readme( $data );
+			return false;
 		}
 
 
