@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.0';
+		private $version         = '0.1.1';
 
 		private function __construct() {
 
@@ -183,7 +183,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				'version'      => $this->version,
 				'repository'   => $options[ $slug ]['repository'],
 				'last_updated' => time(),
-				'last_error'   => isset( $old_data['last_error'] ) ? $old_data['last_error'] : 'ERROR',
+				'last_error'   => isset( $old_data['last_error'] ) ? $old_data['last_error'] : '',
 				'update_info'  => $update_info,
 
 				// get args preferable from the plugin fallback to stored data if plugin is disabled
@@ -502,7 +502,9 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				return $cache;
 			}
 
-			if ( get_transient( 'evp_update_rate_limit' ) ) {
+			// rate limit
+			if ( $rate_limit = get_transient( 'evp_update_rate_limit' ) ) {
+				error_log( print_r( 'RATE LIMIT REACHED ' . human_time_diff( $rate_limit ), true ) );
 				return false;
 			}
 
@@ -532,21 +534,23 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				if ( $code === 403 ) {
 					$headers = wp_remote_retrieve_headers( $response );
 					// check for rate limit
-					$reset = $headers['x-ratelimit-reset'];
+					$rate_limit = $headers['x-ratelimit-reset'];
+					set_transient( 'evp_update_rate_limit', $rate_limit, $rate_limit - time() );
 
-					error_log( print_r( $reset, true ) );
-					error_log( print_r( $reset - time(), true ) );
-					set_transient( 'evp_update_rate_limit', true, 60 );
+					wp_admin_notice(
+						'Rate Limit reached. Please wait: ' . human_time_diff( $rate_limit ),
+						array( 'type' => 'error' )
+					);
+
 				}
 
-				$this->set_plugin_arg( $slug, 'last_error', $body->message );
+				// $this->set_plugin_arg( $slug, 'last_error', $body->message );
 
 				// $options = get_option( 'wp_updater_plugins', array() );
 
 				// $options[ $slug ]['last_error'] = $body->message;
 
 				// update_option( 'wp_updater_plugins', $options, false );
-
 
 				wp_admin_notice(
 					'WP Updater Error: ' . $body->message . '<br>' . $body->documentation_url,
