@@ -29,7 +29,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			$actions += array( 'wpupdater_source' => '<span><strong title="' . esc_attr__( 'Updates serverd from Github', 'wp-update' ) . '">Github</strong></span>' );
-		
 
 			return $actions;
 		}
@@ -45,6 +44,10 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			if ( $message = get_transient( 'wp_updater_plugins_error_' . $plugin_file ) ) {
 				printf( '<div class="notice notice-error inline notice-alt"><p>%s</p></div>', '[WP Updater] ' . esc_html( $message ) );
 			}
+
+			$relative_path = str_replace( ABSPATH, '', __FILE__ );
+
+			printf( '<sup>%s</sup>', '<strong>' . $relative_path . '</strong>' );
 		}
 
 		public static function add( $slug = null, $args = array() ) {
