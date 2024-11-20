@@ -9,13 +9,42 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.1';
+		private $version         = '0.1.0';
 
 		private function __construct() {
 
 			add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_for_update' ), PHP_INT_MAX );
 			add_filter( 'plugins_api', array( $this, 'plugin_info' ), PHP_INT_MAX, 3 );
 			add_filter( 'upgrader_source_selection', array( $this, 'rename_github_zip' ), PHP_INT_MAX, 4 );
+			add_action( 'after_plugin_row_meta', array( $this, 'plugin_row_meta' ), PHP_INT_MAX, 2 );
+			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
+		}
+
+		public function plugin_action_links( $actions, $plugin_file, $plugin_data, $context ) {
+
+			$plugin_args = $this->get_plugin_args( $plugin_file );
+
+			if ( ! $plugin_args ) {
+				return $actions;
+			}
+
+			$actions += array( 'wpupdater_source' => '<span><strong title="' . esc_attr__( 'Updates serverd from Github', 'wp-update' ) . '">Github</strong></span>' );
+		
+
+			return $actions;
+		}
+
+		public function plugin_row_meta( $plugin_file, $plugin_data ) {
+
+			$plugin_args = $this->get_plugin_args( $plugin_file );
+
+			if ( ! $plugin_args ) {
+				return;
+			}
+
+			if ( $message = get_transient( 'wp_updater_plugins_error_' . $plugin_file ) ) {
+				printf( '<div class="notice notice-error inline notice-alt"><p>%s</p></div>', '[WP Updater] ' . esc_html( $message ) );
+			}
 		}
 
 		public static function add( $slug = null, $args = array() ) {
@@ -92,11 +121,8 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			// check if the data is still valid
 			if ( isset( $options[ $slug ]['last_updated'] ) && time() - $options[ $slug ]['last_updated'] < 60 ) {
-
 				return $options[ $slug ];
 			}
-
-			$old_data = $options[ $slug ];
 
 			// basic info should be always there (offline)
 			$plugin_data = $this->get_plugin_data( $slug );
@@ -179,11 +205,13 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				$update_info['requires_php'] = $readme['requires_php'];
 			}
 
+			// reload as it may have changed
+			$old_data = get_option( 'wp_updater_plugins', array() );
+
 			$options[ $slug ] = array(
 				'version'      => $this->version,
 				'repository'   => $options[ $slug ]['repository'],
 				'last_updated' => time(),
-				'last_error'   => isset( $old_data['last_error'] ) ? $old_data['last_error'] : '',
 				'update_info'  => $update_info,
 
 				// get args preferable from the plugin fallback to stored data if plugin is disabled
@@ -350,7 +378,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				array(
 
 					'name'              => $update_info['name'],
-					'slug'              => str_replace( '/', '-', $slug ),
 					'slug'              => dirname( $slug ), // makes the update button break
 					'slug'              => $slug,
 
@@ -498,64 +525,56 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$cache_key = 'evp_update_' . md5( $url . serialize( $headers ) );
 			$cache     = get_transient( $cache_key );
 
+			// serve cached version if possible
 			if ( $cache ) {
 				return $cache;
 			}
 
 			// rate limit
 			if ( $rate_limit = get_transient( 'evp_update_rate_limit' ) ) {
-				error_log( print_r( 'RATE LIMIT REACHED ' . human_time_diff( $rate_limit ), true ) );
+				$this->error( $slug, 'Rate limit reached. Try again at ' . wp_date( get_option( 'time_format' ), $rate_limit ) . '.' );
 				return false;
 			}
 
 			$default_headers = array(
-				'Accept'               => 'application/vnd.github.v3+json',
-				'X-GitHub-Api-Version' => '2020-01-01',
-				'User-Agent'           => 'EverPress/WPUpdater',
+				'Accept'               => 'application/json',
+				// https://docs.github.com/en/rest/about-the-rest-api/api-versions
+				'X-GitHub-Api-Version' => '2022-11-28',
+				'User-Agent'           => 'EverPress/WPUpdater ' . $this->version,
 			);
+
+			// TODO: add authentification
 
 			$headers = wp_parse_args( $headers, $default_headers );
 
 			$response = wp_remote_get( $url, $headers );
 
+			// http error or other
 			if ( is_wp_error( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// error_log( $response->get_error_message() );
 				}
-				// $this->set_plugin_arg( $slug, 'last_error', $response->get_error_message() );
 				return false;
 			}
 
 			$body = json_decode( wp_remote_retrieve_body( $response ) );
 			$code = wp_remote_retrieve_response_code( $response );
 
-			if ( $code !== 200 ) {
+			$headers = wp_remote_retrieve_headers( $response );
 
-				if ( $code === 403 ) {
-					$headers = wp_remote_retrieve_headers( $response );
-					// check for rate limit
-					$rate_limit = $headers['x-ratelimit-reset'];
-					set_transient( 'evp_update_rate_limit', $rate_limit, $rate_limit - time() );
+			$limit_remaining = $headers['x-ratelimit-remaining'];
+			$rate_limit      = $headers['x-ratelimit-reset'];
 
-					wp_admin_notice(
-						'Rate Limit reached. Please wait: ' . human_time_diff( $rate_limit ),
-						array( 'type' => 'error' )
-					);
-
-				}
-
-				// $this->set_plugin_arg( $slug, 'last_error', $body->message );
-
-				// $options = get_option( 'wp_updater_plugins', array() );
-
-				// $options[ $slug ]['last_error'] = $body->message;
-
-				// update_option( 'wp_updater_plugins', $options, false );
-
+			if ( $limit_remaining <= 0 ) {
+				$this->error( $slug, 'Rate limit reached. Try again in ' . human_time_diff( $rate_limit ), true );
+				set_transient( 'evp_update_rate_limit', $rate_limit, $rate_limit - time() );
 				wp_admin_notice(
 					'WP Updater Error: ' . $body->message . '<br>' . $body->documentation_url,
 					array( 'type' => 'error' )
 				);
+			}
+
+			if ( $code !== 200 ) {
 				return false;
 			}
 
@@ -563,6 +582,10 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$expiration += rand( 0, 360 );
 
 			set_transient( $cache_key, $body, $expiration );
+
+			delete_transient( 'wp_updater_plugins_error_' . $slug );
+
+			// set_transient( $cache_key, $body, 5 );
 
 			return $body;
 		}
@@ -588,6 +611,24 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			return $source;
+		}
+
+
+
+		private function error( $slug, $message, $admin_notice = false ) {
+			// $options = get_option( 'wp_updater_plugins', array() );
+
+			set_transient( 'wp_updater_plugins_error_' . $slug, $message, DAY_IN_SECONDS );
+
+			error_log( $message );
+
+			// $options[ $slug ]['last_error'] = $message;
+
+			// update_option( 'wp_updater_plugins', $options, false );
+
+			if ( $admin_notice ) {
+				wp_admin_notice( '[WP UPDATE]: ' . $message, array( 'type' => 'error' ) );
+			}
 		}
 
 
