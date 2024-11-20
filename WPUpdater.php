@@ -20,36 +20,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
 		}
 
-		public function plugin_action_links( $actions, $plugin_file, $plugin_data, $context ) {
-
-			$plugin_args = $this->get_plugin_args( $plugin_file );
-
-			if ( ! $plugin_args ) {
-				return $actions;
-			}
-
-			$actions += array( 'wpupdater_source' => '<span><strong title="' . esc_attr__( 'Updates serverd from Github', 'wp-update' ) . '">Github</strong></span>' );
-
-			return $actions;
-		}
-
-		public function plugin_row_meta( $plugin_file, $plugin_data ) {
-
-			$plugin_args = $this->get_plugin_args( $plugin_file );
-
-			if ( ! $plugin_args ) {
-				return;
-			}
-
-			if ( $message = get_transient( 'wp_updater_plugins_error_' . $plugin_file ) ) {
-				printf( '<div class="notice notice-error inline notice-alt"><p>%s</p></div>', '[WP Updater] ' . esc_html( $message ) );
-			}
-
-			$relative_path = str_replace( ABSPATH, '', __FILE__ );
-
-			printf( '<sup>%s</sup>', '<strong>' . $relative_path . '</strong>' );
-		}
-
 		public static function add( $slug = null, $args = array() ) {
 
 			if ( self::$instance === null ) {
@@ -615,6 +585,38 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			return $source;
 		}
+
+		
+		public function plugin_action_links( $actions, $plugin_file, $plugin_data, $context ) {
+
+			$plugin_args = $this->get_plugin_args( $plugin_file );
+
+			if ( ! $plugin_args ) {
+				return $actions;
+			}
+
+			$actions += array( 'wpupdater_source' => '<span><strong title="' . esc_attr__( 'Updates serverd from Github', 'wp-update' ) . '">Github</strong></span>' );
+
+			return $actions;
+		}
+
+		public function plugin_row_meta( $plugin_file, $plugin_data ) {
+
+			$plugin_args = $this->get_plugin_args( $plugin_file );
+
+			if ( ! $plugin_args ) {
+				return;
+			}
+
+			if ( $message = get_transient( 'wp_updater_plugins_error_' . $plugin_file ) ) {
+				printf( '<div class="notice notice-error inline notice-alt"><p>%s</p></div>', '[WP Updater] ' . esc_html( $message ) );
+			}
+
+			$relative_path = str_replace( ABSPATH, '', __FILE__ );
+
+			printf( '<sup>%s</sup>', '<strong>' . $relative_path . '</strong>' );
+		}
+
 
 
 
