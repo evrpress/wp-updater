@@ -101,16 +101,21 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$plugin_data = $this->get_plugin_data( $slug );
 
 			$update_info = array(
-				'name'     => $plugin_data['Name'],
-				'version'  => $plugin_data['Version'],
-				'author'   => $plugin_data['Author'],
-				'homepage' => $plugin_data['PluginURI'],
+				'name'         => $plugin_data['Name'],
+				'version'      => $plugin_data['Version'],
+				'author'       => $plugin_data['Author'],
+				'homepage'     => $plugin_data['PluginURI'],
+				'requires'     => $plugin_data['RequiresWP'],
+				'requires_php' => $plugin_data['RequiresPHP'],
+				'tested'       => null,
 			);
 
-			// $plugin = $this->get_plugin( $slug );
-			// $update_info = wp_parse_args( $plugin, $update_info );
-
 			$repo = $this->get_repo( $slug );
+
+			if ( is_wp_error( $repo ) ) {
+				$this->error( $slug, $repo->get_error_message(), true );
+				return $options[ $slug ];
+			}
 
 			if ( $repo ) {
 				$update_info['last_updated'] = $repo->updated_at;
@@ -172,10 +177,14 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			} else {
 				$readme = $this->get_local_readme( $slug );
 			}
-			if ( $readme ) {
+
+			if ( is_wp_error( $readme ) ) {
+				$this->error( $slug, $readme->get_error_message(), true );
+				// return $options[ $slug ];
+			} else {
 				$update_info['requires']     = $readme['requires'];
-				$update_info['tested']       = $readme['tested'];
 				$update_info['requires_php'] = $readme['requires_php'];
+				$update_info['tested']       = $readme['tested'];
 			}
 
 			// reload as it may have changed
@@ -190,8 +199,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				// get args preferable from the plugin fallback to stored data if plugin is disabled
 				'args'         => isset( self::$plugins[ $slug ] ) ? self::$plugins[ $slug ] : $old_data['args'], // info wee need to store
 			);
-
-			// $this->update_plugin_args( $slug, $options[ $slug ] );
 
 			update_option( 'wp_updater_plugins', $options, false );
 
@@ -218,7 +225,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			if ( ! isset( $transient->checked ) ) {
 				// return $transient;
 			}
-			error_log( print_r( 'check_for_update', true ) );
 
 			$options = get_option( 'wp_updater_plugins', array() );
 
@@ -455,6 +461,10 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			$response = $this->request( $url, array(), HOUR_IN_SECONDS * 3, $slug );
 
+			if ( is_wp_error( $response ) ) {
+				return $response;
+			}
+
 			if ( ! $response ) {
 				return $this->get_local_readme( $slug );
 			}
@@ -510,24 +520,35 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			$default_headers = array(
-				'Accept'               => 'application/json',
+				'Accept'               => 'application/vnd.github+json',
 				// https://docs.github.com/en/rest/about-the-rest-api/api-versions
 				'X-GitHub-Api-Version' => '2022-11-28',
-				'User-Agent'           => 'EverPress/WPUpdater ' . $this->version,
 			);
 
-			// TODO: add authentification
+			// add authentification
+			if ( defined( 'GITHUB_TOKEN' ) ) {
+				$default_headers['Authorization'] = 'Bearer ' . GITHUB_TOKEN;
+			}
 
-			$headers = wp_parse_args( $headers, $default_headers );
+			/**
+			 * Filters the headers for a request.
+			 *
+			 * @param array $headers
+			 */
+			$headers = apply_filters( 'wp_updater_request_headers', wp_parse_args( $headers, $default_headers ) );
 
-			$response = wp_remote_get( $url, $headers );
+			$response = wp_remote_get(
+				$url,
+				array(
+					'headers'    => $headers,
+					'user-agent' => 'EverPress/WPUpdater ' . $this->version,
+				)
+			);
 
 			// http error or other
 			if ( is_wp_error( $response ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					// error_log( $response->get_error_message() );
-				}
-				return false;
+				$this->error( $slug, $response->get_error_message(), true );
+				return $response;
 			}
 
 			$body = json_decode( wp_remote_retrieve_body( $response ) );
@@ -548,15 +569,19 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			if ( $code !== 200 ) {
-				return false;
+
+				$expiration = 15;
+
+				$body = new \WP_Error( $code, $body->message );
+
+				// return false;
+			} else {
+				// add random sconds to expiration to avoid all requests at the same time
+				$expiration += rand( 0, 360 );
+				delete_transient( 'wp_updater_plugins_error_' . $slug );
+
 			}
-
-			// add random sconds to expiration to avoid all requests at the same time
-			$expiration += rand( 0, 360 );
-
 			set_transient( $cache_key, $body, $expiration );
-
-			delete_transient( 'wp_updater_plugins_error_' . $slug );
 
 			// set_transient( $cache_key, $body, 5 );
 
@@ -586,7 +611,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			return $source;
 		}
 
-		
+
 		public function plugin_action_links( $actions, $plugin_file, $plugin_data, $context ) {
 
 			$plugin_args = $this->get_plugin_args( $plugin_file );
@@ -621,18 +646,18 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 
 		private function error( $slug, $message, $admin_notice = false ) {
-			// $options = get_option( 'wp_updater_plugins', array() );
 
 			set_transient( 'wp_updater_plugins_error_' . $slug, $message, DAY_IN_SECONDS );
 
-			error_log( $message );
+			$plugin_data = $this->get_plugin_data( $slug );
+			$link        = sprintf( '<a href="%s">%s</a>', add_query_arg( 's', dirname( $slug ), admin_url( 'plugins.php' ) ), esc_html( $plugin_data['Name'] ) );
 
-			// $options[ $slug ]['last_error'] = $message;
+			$error_message = sprintf( '[%s]: %s', $link, $message );
 
-			// update_option( 'wp_updater_plugins', $options, false );
+			error_log( $error_message );
 
-			if ( $admin_notice ) {
-				wp_admin_notice( '[WP UPDATE]: ' . $message, array( 'type' => 'error' ) );
+			if ( current_user_can( 'manage_plugins' ) && $admin_notice ) {
+				wp_admin_notice( $error_message, array( 'type' => 'error' ) );
 			}
 		}
 
