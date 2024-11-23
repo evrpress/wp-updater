@@ -11,6 +11,40 @@ The [WP Updater](https://github.com/evrpress/wp-updater) is a PHP library design
 ## Installation and Usage
 
 1. **Include the Library:** Add the WP Updater library to your plugin or theme by including the `WPUpdater.php` file.
+
+Add this line to your `composer.json` file:
+
+```json
+{
+	"minimum-stability": "dev",
+	"repositories": [
+		{
+			"type": "vcs",
+			"url": "https://github.com/evrpress/wp-updater.git"
+		}
+	],
+	"require": {
+		"evrpress/wp-updater": "*"
+	}
+}
+
+```
+
+And this to your base plugin file:
+
+```php
+require_once __DIR__ . '/vendor/autoload.php';
+
+
+// Initialize the updater
+class_exists( 'EverPress\WPUpdater' ) && \EverPress\WPUpdater::add(
+	'{plugin-slug}',
+	array(
+		'repository' => '{plugin-owner}/{plugin-repo}',
+	)
+);
+```
+
 2. **Initialize the Updater:** In your plugin or theme's main file, initialize the updater with the necessary parameters, such as the GitHub repository URL and access token if required.
 3. **Configure Updates:** Set up the updater to check for updates at desired intervals, ensuring that your plugin or theme remains current with the latest changes from the GitHub repository.
 
