@@ -18,7 +18,10 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			add_filter( 'upgrader_source_selection', array( $this, 'rename_github_zip' ), PHP_INT_MAX, 4 );
 			add_action( 'after_plugin_row_meta', array( $this, 'plugin_row_meta' ), PHP_INT_MAX, 2 );
 			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
+			add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), PHP_INT_MAX, 3 );
 		}
+
+
 
 		public static function add( $slug = null, $args = array() ) {
 
@@ -195,10 +198,14 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				'repository'   => $options[ $slug ]['repository'],
 				'last_updated' => time(),
 				'update_info'  => $update_info,
-
-				// get args preferable from the plugin fallback to stored data if plugin is disabled
-				'args'         => isset( self::$plugins[ $slug ] ) ? self::$plugins[ $slug ] : $old_data['args'], // info wee need to store
 			);
+
+			// get args preferable from the plugin fallback to stored data if plugin is disabled
+			if ( isset( self::$plugins[ $slug ] ) ) {
+				$options[ $slug ]['args'] = self::$plugins[ $slug ];
+			} elseif ( isset( $old_data[ $slug ]['args'] ) ) {
+				$options[ $slug ]['args'] = $old_data[ $slug ]['args'];
+			}
 
 			update_option( 'wp_updater_plugins', $options, false );
 
@@ -643,6 +650,20 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		}
 
 
+		public function upgrader_post_install( $res, $hook_extra, $result ) {
+			if ( ! $res ) {
+				return $res;
+			}
+			if ( ! isset( $hook_extra['plugin'] ) ) {
+				return $res;
+			}
+
+			// reset and force a refresh of the data
+			$this->update_plugin_args( $hook_extra['plugin'], array( 'last_updated' => 0 ) );
+			$this->prepare_plugin_args( $hook_extra['plugin'] );
+
+			return $res;
+		}
 
 
 		private function error( $slug, $message, $admin_notice = false ) {
