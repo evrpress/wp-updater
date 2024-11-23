@@ -16,18 +16,17 @@ Add this line to your `composer.json` file:
 
 ```json
 {
-	"minimum-stability": "dev",
-	"repositories": [
-		{
-			"type": "vcs",
-			"url": "https://github.com/evrpress/wp-updater.git"
-		}
-	],
-	"require": {
-		"evrpress/wp-updater": "*"
-	}
+ "require": {
+  "evrpress/wp-updater": "^0.1.2"
+ }
 }
 
+```
+
+or run
+
+```
+composer require evrpress/wp-updater
 ```
 
 And this to your base plugin file:
@@ -38,10 +37,10 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 // Initialize the updater
 class_exists( 'EverPress\WPUpdater' ) && \EverPress\WPUpdater::add(
-	'{plugin-slug}',
-	array(
-		'repository' => '{plugin-owner}/{plugin-repo}',
-	)
+ '{plugin-slug}',
+ array(
+  'repository' => '{plugin-owner}/{plugin-repo}',
+ )
 );
 ```
 
