@@ -17,7 +17,7 @@ Add this line to your `composer.json` file:
 ```json
 {
  "require": {
-  "evrpress/wp-updater": "^0.1.2"
+  "evrpress/wp-updater": "^0.1.3"
  }
 }
 
