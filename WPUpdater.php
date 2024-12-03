@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.3';
+		private $version         = '0.1.4';
 
 		private function __construct() {
 
@@ -652,16 +652,27 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				return $source;
 			}
 
+			if ( ! ( $upgrader instanceof \Plugin_Upgrader ) ) {
+				return $source;
+			}
+
 			$options = $this->get_option();
 
 			// iterate through all registererd plugins
 			foreach ( $options as $slug => $options ) {
+
+				// not our plugin
+				if ( $extra['plugin'] != $slug ) {
+					continue;
+				}
 
 				$new_source = trailingslashit( $remote_source ) . trailingslashit( dirname( $slug ) );
 
 				if ( strtolower( $source ) !== strtolower( $new_source ) ) {
 					$wp_filesystem->move( $source, $new_source, true );
 				}
+
+				return $new_source;
 			}
 
 			return $source;
@@ -758,7 +769,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$slug = str_replace( 'uninstall_', '', current_filter() );
 
 			// cleanup
-			$options = $this->get_option();
+			$options = (array) get_option( 'wp_updater_plugins', array() );
 
 			if ( isset( $options[ $slug ] ) ) {
 				unset( $options[ $slug ] );
