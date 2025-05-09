@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.3';
+		private $version         = '0.1.6';
 
 		private function __construct() {
 
@@ -872,7 +872,12 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		 */
 		public function self_check() {
 
-			$url = sprintf( 'https://api.github.com/repos/%s/tags', 'evrpress/wp-updater' );
+			//don't update if the folder contains a .git folder
+			if ( file_exists( __DIR__ . '/.git' ) ) {
+				return;
+			}
+
+			$url = sprintf( 'https://api.github.com/repos/%s/releases/latest', 'evrpress/wp-updater' );
 
 			$response = $this->request( $url, array(), MINUTE_IN_SECONDS );
 
@@ -880,18 +885,41 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				return;
 			}
 
-			$latest_version = $response[0]->name;
+			$latest_version = $response->tag_name;
 
-			if ( ! version_compare( $this->version, $latest_version, '<' ) ) {
+			//don't update if the version is the same
+			if ( version_compare( $this->version, $latest_version, '>=' ) ) {
 				return;
 			}
 
-			//TODO maybe update autoamtically
-			$url = sprintf( 'https://api.github.com/repos/%s/tags/%s', 'evrpress/wp-updater', $latest_version );
+			$download_url = $response->assets[0]->browser_download_url;
 
-			$response = $this->request( $url, array(), MINUTE_IN_SECONDS );
+			if ( ! function_exists( 'download_url' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+			}
 
-			error_log( print_r( $response, true ) );
+			$temp_file = download_url( $download_url );
+
+			if ( is_wp_error( $temp_file ) ) {
+				return;
+			}
+
+			$temp_dir = WP_CONTENT_DIR . '/upgrade/' . basename( __DIR__ ) . '-' . uniqid();
+
+			//init fileSystem
+			WP_Filesystem();
+			global $wp_filesystem;
+
+			wp_mkdir_p( $temp_dir );
+
+			//unzip the file
+			$unzipped = unzip_file( $temp_file, $temp_dir );
+
+			if ( is_wp_error( $unzipped ) ) {
+				return;
+			}
+
+			$wp_filesystem->move( $temp_dir, __DIR__, true );
 		}
 	}
 }
