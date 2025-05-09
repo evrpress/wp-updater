@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.5';
+		private $version         = '0.1.3';
 
 		private function __construct() {
 
@@ -20,8 +20,9 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			add_action( 'load-plugins.php', array( $this, 'handle_actions' ) );
 			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
 			add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), PHP_INT_MAX, 3 );
-
 			add_filter( 'upgrader_pre_download', array( &$this, 'upgrader_pre_download' ), 100, 4 );
+
+			add_action( 'admin_init', array( $this, 'self_check' ) );
 		}
 
 		public function upgrader_pre_download( $res, $package, $upgrader, $hook_extra ) {
@@ -53,7 +54,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		}
 
 
-
 		public static function add( $slug = null, $args = array() ) {
 
 			if ( self::$instance === null ) {
@@ -75,6 +75,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				self::$plugins[ $slug ] = wp_parse_args( $args, self::default_args() );
 				register_activation_hook( $slug, array( self::$instance, 'register_activation_hook' ) );
 				register_deactivation_hook( $slug, array( self::$instance, 'register_deactivation_hook' ) );
+
 			}
 
 			return self::$instance;
@@ -179,10 +180,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			);
 
 			$repo = $this->get_repo( $slug );
-
-			// error_log( print_r( $repo->releases_url, true ) );
-			// error_log( print_r( $repo, true ) );
-			// error_log( print_r( $x, true ) );
 
 			if ( is_wp_error( $repo ) ) {
 				$this->error( $slug, $repo->get_error_message(), true );
@@ -866,6 +863,35 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			} else {
 				update_option( 'wp_updater_plugins', $options, false );
 			}
+		}
+
+		/**
+		 * Run occassianally to check if the plugin needs to be updated
+		 *
+		 * @return void
+		 */
+		public function self_check() {
+
+			$url = sprintf( 'https://api.github.com/repos/%s/tags', 'evrpress/wp-updater' );
+
+			$response = $this->request( $url, array(), MINUTE_IN_SECONDS );
+
+			if ( is_wp_error( $response ) ) {
+				return;
+			}
+
+			$latest_version = $response[0]->name;
+
+			if ( ! version_compare( $this->version, $latest_version, '<' ) ) {
+				return;
+			}
+
+			//TODO maybe update autoamtically
+			$url = sprintf( 'https://api.github.com/repos/%s/tags/%s', 'evrpress/wp-updater', $latest_version );
+
+			$response = $this->request( $url, array(), MINUTE_IN_SECONDS );
+
+			error_log( print_r( $response, true ) );
 		}
 	}
 }
