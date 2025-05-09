@@ -28,6 +28,10 @@ jobs:
         run: |
           VERSION=$(grep -o '"version": *"[^"]*"' composer.json | cut -d'"' -f4)
           PROJECT_NAME=$(grep -o '"name": *"[^"]*"' composer.json | cut -d'"' -f4)
+          # Extract the part after the slash (if any)
+          if [[ "$PROJECT_NAME" == *"/"* ]]; then
+            PROJECT_NAME=$(echo "$PROJECT_NAME" | cut -d'/' -f2)
+          fi
           echo "Version is $VERSION"
           echo "Project name is $PROJECT_NAME"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
