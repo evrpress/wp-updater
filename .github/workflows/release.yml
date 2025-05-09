@@ -33,11 +33,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
 
-      - name: 📦 Install Composer
-        uses: 'php-actions/composer@v6'
-        with:
-          command: 'ls -la'
-
       - name: 🤞 Install dependencies
         run: |
           [ -f "package.json" ] && npm install --no-fund --silent || echo "No package.json file found"
