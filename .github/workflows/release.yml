@@ -52,7 +52,16 @@ jobs:
           ZIP_NAME="${{ steps.read_version.outputs.project_name }}.zip"
           # zip the current directory
           ls -la
-          zip -r $ZIP_NAME .
+          # Create a temporary gitignore file that includes the .github folder
+          echo ".github/" >> .gitignoretemp
+          # Append the existing .gitignore file if it exists
+          if [ -f ".gitignore" ]; then
+            cat .gitignore >> .gitignoretemp
+          fi
+          # Zip all files except those listed in the temporary gitignore
+          zip -r $ZIP_NAME . -x@.gitignoretemp
+          # Remove the temporary gitignore file
+          rm .gitignoretemp
           echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
           #unzip into dist for WordPress Plugin Deploy
 
