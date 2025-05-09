@@ -9,20 +9,30 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.6';
+		private $version         = '0.1.7';
 
 		private function __construct() {
 
+			// hook into the update check
 			add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_for_update' ), PHP_INT_MAX );
+
+			// for the plugin information screen
 			add_filter( 'plugins_api', array( $this, 'plugin_info' ), PHP_INT_MAX, 3 );
+
+			// filenames need to be cleaned up
 			add_filter( 'upgrader_source_selection', array( $this, 'rename_github_zip' ), PHP_INT_MAX, 4 );
-			add_action( 'after_plugin_row_meta', array( $this, 'plugin_row_meta' ), PHP_INT_MAX, 2 );
+
+			// handle the switch action on the plugins page
 			add_action( 'load-plugins.php', array( $this, 'handle_actions' ) );
-			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
+
+			// handle the post install and cleanup
 			add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), PHP_INT_MAX, 3 );
+
+			// hook into download to add the token if needed
 			add_filter( 'upgrader_pre_download', array( &$this, 'upgrader_pre_download' ), 100, 4 );
 
-			add_action( 'admin_init', array( $this, 'self_check' ) );
+			// check for updates on the version check
+			add_action( 'wp_version_check', array( $this, 'self_check' ) );
 		}
 
 		public function upgrader_pre_download( $res, $package, $upgrader, $hook_extra ) {
@@ -206,12 +216,13 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				// get the package
 				$package = $remote_info->zipball_url;
 
-				// preferable from the asstes
-				if ( isset( $remote_info->assets ) ) {
+				// preferable from the assets
+				// when private use the zipball_url
+				if ( ! $repo->private && isset( $remote_info->assets ) ) {
 					foreach ( $remote_info->assets as $asset ) {
 						// must be a zip file
 						// TODO: check if the the file is the right one
-						// also not acceable with a private repo
+						// also not accessible with a private repo
 						if ( $asset->content_type === 'application/octet-stream' ) {
 							$package = $asset->browser_download_url;
 							break;
@@ -748,6 +759,12 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		}
 
 		public function handle_actions() {
+
+			// add a information to the plugin meta row
+			add_action( 'after_plugin_row_meta', array( $this, 'plugin_row_meta' ), PHP_INT_MAX, 2 );
+			// add a link to the plugin row
+			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
+
 			if ( ! isset( $_REQUEST['action'] ) || $_REQUEST['action'] !== 'switch' ) {
 				return;
 			}
