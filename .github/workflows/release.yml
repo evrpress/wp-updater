@@ -48,7 +48,7 @@ jobs:
       - name: 🧹 Cleanup
         run: |
           echo "Cleanup"
-          rm -f README.md
+          #rm -f README.md
 
       - name: 🗜️ Zip the contents of the dist directory with project name and version
         id: zip_project
@@ -59,7 +59,7 @@ jobs:
           echo "Creating zip file: $ZIP_NAME"
 
           # Include only the main plugin file and the updater class
-          zip -r "$ZIP_NAME" ./WPUpdater.php ./readme.txt, ./LICENSE ./vendor
+          zip -r "$ZIP_NAME" ./WPUpdater.php ./ReadmeParser.php ./README.md ./LICENSE ./vendor ./composer.json ./composer.lock
 
           # Check if zip was created successfully
           if [ -f "$ZIP_NAME" ]; then
