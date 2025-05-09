@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.5';
+		private $version         = '0.1.6';
 
 		private function __construct() {
 
@@ -20,8 +20,9 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			add_action( 'load-plugins.php', array( $this, 'handle_actions' ) );
 			add_filter( 'plugin_action_links', array( $this, 'plugin_action_links' ), PHP_INT_MAX, 4 );
 			add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), PHP_INT_MAX, 3 );
-
 			add_filter( 'upgrader_pre_download', array( &$this, 'upgrader_pre_download' ), 100, 4 );
+
+			add_action( 'admin_init', array( $this, 'self_check' ) );
 		}
 
 		public function upgrader_pre_download( $res, $package, $upgrader, $hook_extra ) {
@@ -53,7 +54,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		}
 
 
-
 		public static function add( $slug = null, $args = array() ) {
 
 			if ( self::$instance === null ) {
@@ -75,6 +75,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				self::$plugins[ $slug ] = wp_parse_args( $args, self::default_args() );
 				register_activation_hook( $slug, array( self::$instance, 'register_activation_hook' ) );
 				register_deactivation_hook( $slug, array( self::$instance, 'register_deactivation_hook' ) );
+
 			}
 
 			return self::$instance;
@@ -179,10 +180,6 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			);
 
 			$repo = $this->get_repo( $slug );
-
-			// error_log( print_r( $repo->releases_url, true ) );
-			// error_log( print_r( $repo, true ) );
-			// error_log( print_r( $x, true ) );
 
 			if ( is_wp_error( $repo ) ) {
 				$this->error( $slug, $repo->get_error_message(), true );
@@ -866,6 +863,63 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			} else {
 				update_option( 'wp_updater_plugins', $options, false );
 			}
+		}
+
+		/**
+		 * Run occassianally to check if the plugin needs to be updated
+		 *
+		 * @return void
+		 */
+		public function self_check() {
+
+			//don't update if the folder contains a .git folder
+			if ( file_exists( __DIR__ . '/.git' ) ) {
+				return;
+			}
+
+			$url = sprintf( 'https://api.github.com/repos/%s/releases/latest', 'evrpress/wp-updater' );
+
+			$response = $this->request( $url, array(), MINUTE_IN_SECONDS );
+
+			if ( is_wp_error( $response ) ) {
+				return;
+			}
+
+			$latest_version = $response->tag_name;
+
+			//don't update if the version is the same
+			if ( version_compare( $this->version, $latest_version, '>=' ) ) {
+				return;
+			}
+
+			$download_url = $response->assets[0]->browser_download_url;
+
+			if ( ! function_exists( 'download_url' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+			}
+
+			$temp_file = download_url( $download_url );
+
+			if ( is_wp_error( $temp_file ) ) {
+				return;
+			}
+
+			$temp_dir = WP_CONTENT_DIR . '/upgrade/' . basename( __DIR__ ) . '-' . uniqid();
+
+			//init fileSystem
+			WP_Filesystem();
+			global $wp_filesystem;
+
+			wp_mkdir_p( $temp_dir );
+
+			//unzip the file
+			$unzipped = unzip_file( $temp_file, $temp_dir );
+
+			if ( is_wp_error( $unzipped ) ) {
+				return;
+			}
+
+			$wp_filesystem->move( $temp_dir, __DIR__, true );
 		}
 	}
 }

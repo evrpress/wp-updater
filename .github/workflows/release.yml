@@ -28,15 +28,14 @@ jobs:
         run: |
           VERSION=$(grep -o '"version": *"[^"]*"' composer.json | cut -d'"' -f4)
           PROJECT_NAME=$(grep -o '"name": *"[^"]*"' composer.json | cut -d'"' -f4)
+          # Extract the part after the slash (if any)
+          if [[ "$PROJECT_NAME" == *"/"* ]]; then
+            PROJECT_NAME=$(echo "$PROJECT_NAME" | cut -d'/' -f2)
+          fi
           echo "Version is $VERSION"
           echo "Project name is $PROJECT_NAME"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
-
-      - name: 📦 Install Composer
-        uses: 'php-actions/composer@v6'
-        with:
-          command: 'ls -la'
 
       - name: 🤞 Install dependencies
         run: |
@@ -49,14 +48,25 @@ jobs:
       - name: 🧹 Cleanup
         run: |
           echo "Cleanup"
-          rm -f README.md
+          #rm -f README.md
 
       - name: 🗜️ Zip the contents of the dist directory with project name and version
         id: zip_project
         run: |
           ZIP_NAME="${{ steps.read_version.outputs.project_name }}.zip"
           # zip the current directory
-          zip -r $ZIP_NAME .
+          # Create zip file with only specific files
+          echo "Creating zip file: $ZIP_NAME"
+
+          # Include only the main plugin file and the updater class
+          zip -r "$ZIP_NAME" ./WPUpdater.php ./ReadmeParser.php ./README.md ./LICENSE ./vendor ./composer.json ./composer.lock
+
+          # Check if zip was created successfully
+          if [ -f "$ZIP_NAME" ]; then
+            echo "Zip file created successfully with main plugin files"
+          else
+            echo "Failed to create zip file" && exit 1
+          fi
           echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
           #unzip into dist for WordPress Plugin Deploy
 
@@ -66,5 +76,6 @@ jobs:
         with:
           repo_token: '${{ secrets.GITHUB_TOKEN }}'
           prerelease: false
+          automatic_release_tag: ${{ steps.read_version.outputs.version }}
           files: |
             ${{ steps.read_version.outputs.project_name }}.zip
