@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.7';
+		private $version         = '0.1.8';
 
 		private function __construct() {
 
