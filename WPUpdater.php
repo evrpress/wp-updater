@@ -9,7 +9,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private static $instance = null;
 		private static $plugins  = array();
-		private $version         = '0.1.7';
+		private $version         = '0.1.8';
 
 		private function __construct() {
 
@@ -57,6 +57,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			if ( strpos( $url, 'github.com' ) !== false ) {
 				$args['headers']['Authorization'] = 'token ' . \GITHUB_TOKEN;
+				$args['headers']['Accept']        = 'application/octet-stream';
 			}
 			remove_filter( 'http_request_args', array( &$this, 'add_github_token_to_headers' ), 100, 2 );
 
@@ -218,13 +219,13 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 				// preferable from the assets
 				// when private use the zipball_url
-				if ( ! $repo->private && isset( $remote_info->assets ) ) {
+				if ( isset( $remote_info->assets ) ) {
 					foreach ( $remote_info->assets as $asset ) {
 						// must be a zip file
 						// TODO: check if the the file is the right one
 						// also not accessible with a private repo
 						if ( $asset->content_type === 'application/octet-stream' ) {
-							$package = $asset->browser_download_url;
+							$package = $asset->url;
 							break;
 						}
 					}
@@ -547,7 +548,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				return false;
 			}
 
-			//TODO: check if this is correct
+			// TODO: check if this is correct
 			if ( file_exists( WP_PLUGIN_DIR . '/' . dirname( $slug ) . '/README.md' ) ) {
 				$file = 'README.md';
 			} else {
@@ -889,7 +890,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		 */
 		public function self_check() {
 
-			//don't update if the folder contains a .git folder
+			// don't update if the folder contains a .git folder
 			if ( file_exists( __DIR__ . '/.git' ) ) {
 				return;
 			}
@@ -904,7 +905,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			$latest_version = $response->tag_name;
 
-			//don't update if the version is the same
+			// don't update if the version is the same
 			if ( version_compare( $this->version, $latest_version, '>=' ) ) {
 				return;
 			}
@@ -923,13 +924,13 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			$temp_dir = WP_CONTENT_DIR . '/upgrade/' . basename( __DIR__ ) . '-' . uniqid();
 
-			//init fileSystem
+			// init fileSystem
 			WP_Filesystem();
 			global $wp_filesystem;
 
 			wp_mkdir_p( $temp_dir );
 
-			//unzip the file
+			// unzip the file
 			$unzipped = unzip_file( $temp_file, $temp_dir );
 
 			if ( is_wp_error( $unzipped ) ) {
