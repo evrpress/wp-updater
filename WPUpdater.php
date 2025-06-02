@@ -10,6 +10,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		private static $instance = null;
 		private static $plugins  = array();
 		private $version         = '0.1.8';
+		private $option_name     = 'wp_updater_plugins';
 
 		private function __construct() {
 
@@ -120,7 +121,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 		 * @return array
 		 */
 		private function get_option() {
-			$options = get_option( 'wp_updater_plugins', array() );
+			$options = get_option( $this->option_name, array() );
 			if ( ! is_array( $options ) ) {
 				$options = array();
 			}
@@ -150,7 +151,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$options[ $slug ] = wp_parse_args( $plugin_args, $options[ $slug ] );
 			// $options[ $slug ] = $options[ $slug ];
 
-			update_option( 'wp_updater_plugins', $options, false );
+			update_option( $this->option_name, $options, false );
 
 			return $options[ $slug ];
 		}
@@ -288,7 +289,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				$options[ $slug ]['args'] = $old_data[ $slug ]['args'];
 			}
 
-			update_option( 'wp_updater_plugins', $options, false );
+				update_option( $this->option_name, $options, false );
 
 			return $update_info;
 		}
@@ -304,7 +305,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 			$options[ $slug ][ $key ] = $value;
 
-			// update_option( 'wp_updater_plugins', $options, false );
+			//update_option( $this->option_name, $options, false );
 		}
 
 
@@ -682,7 +683,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			// remove any error messages
-			delete_transient( 'wp_updater_plugins_error_' . $slug );
+			delete_transient( $this->option_name . '_error_' . $slug );
 
 			set_transient( $cache_key, $body, $expiration );
 
@@ -803,7 +804,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				return;
 			}
 
-			if ( $message = get_transient( 'wp_updater_plugins_error_' . $slug ) ) {
+			if ( $message = get_transient( $this->option_name . '_error_' . $slug ) ) {
 				printf( '<div class="notice notice-error inline notice-alt"><p>%s</p></div>', '[WP Updater] ' . esc_html( $message ) );
 			}
 
@@ -837,7 +838,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 
 		private function error( $slug, $message, $admin_notice = false ) {
 
-			set_transient( 'wp_updater_plugins_error_' . $slug, $message, DAY_IN_SECONDS );
+			set_transient( $this->option_name . '_error_' . $slug, $message, DAY_IN_SECONDS );
 
 			$plugin_data = $this->get_plugin_data( $slug );
 			$link        = sprintf( '<a href="%s">%s</a>', add_query_arg( 's', dirname( $slug ), admin_url( 'plugins.php' ) ), esc_html( $plugin_data['Name'] ) );
@@ -870,16 +871,16 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$slug = str_replace( 'uninstall_', '', current_filter() );
 
 			// cleanup
-			$options = (array) get_option( 'wp_updater_plugins', array() );
+			$options = (array) get_option( $this->option_name, array() );
 
 			if ( isset( $options[ $slug ] ) ) {
 				unset( $options[ $slug ] );
 			}
 
 			if ( empty( $options ) ) {
-				delete_option( 'wp_updater_plugins' );
+				delete_option( $this->option_name );
 			} else {
-				update_option( 'wp_updater_plugins', $options, false );
+				update_option( $this->option_name, $options, false );
 			}
 		}
 
