@@ -84,6 +84,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			if ( isset( self::$plugins[ $slug ] ) ) {
 				_doing_it_wrong( __METHOD__, 'Plugin already registered', '1.0' );
 			} else {
+
 				self::$plugins[ $slug ] = wp_parse_args( $args, self::default_args() );
 				register_activation_hook( $slug, array( self::$instance, 'register_activation_hook' ) );
 				register_deactivation_hook( $slug, array( self::$instance, 'register_deactivation_hook' ) );
@@ -149,6 +150,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			}
 
 			$options[ $slug ] = wp_parse_args( $plugin_args, $options[ $slug ] );
+
 			// $options[ $slug ] = $options[ $slug ];
 
 			update_option( $this->option_name, $options, false );
@@ -174,6 +176,13 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			// check if the data is still valid
 			if ( isset( $options[ $slug ]['last_updated'] ) && time() - $options[ $slug ]['last_updated'] < 60 ) {
 				return $options[ $slug ];
+			}
+
+			// check if the plugin file exists, remove the plugin from the options if it doesn't
+			if ( ! file_exists( WP_PLUGIN_DIR . '/' . $slug ) ) {
+				unset( $options[ $slug ] );
+				update_option( $this->option_name, $options, false );
+				return null;
 			}
 
 			// basic info should be always there (offline)
@@ -278,7 +287,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				// 'version'      => $this->version,
 				'repository'   => $options[ $slug ]['repository'],
 				'last_updated' => time(),
-				'serve_from'   => 'github',
+				'serve_from'   => isset( $old_data[ $slug ]['serve_from'] ) ? $old_data[ $slug ]['serve_from'] : 'github',
 				'update_info'  => $update_info,
 			);
 
@@ -289,7 +298,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				$options[ $slug ]['args'] = $old_data[ $slug ]['args'];
 			}
 
-				update_option( $this->option_name, $options, false );
+			update_option( $this->option_name, $options, false );
 
 			return $update_info;
 		}
@@ -332,7 +341,12 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 				// refresh options
 				$options = $this->prepare_plugin_args( $slug );
 
-				if ( ! isset( $options['update_info'] ) ) {
+				if ( ! $options || ! isset( $options['update_info'] ) ) {
+					continue;
+				}
+
+				// stop if the plugin is served from the wp.org repository
+				if ( $options['serve_from'] === 'wp' ) {
 					continue;
 				}
 
@@ -792,7 +806,7 @@ if ( ! class_exists( 'EverPress\WPUpdater' ) ) {
 			$url = remove_query_arg( array( 'action', 'plugin', 'wp_nonce', 'to' ) );
 			$url = add_query_arg( 'switched', $to, $url );
 
-			wp_redirect( $url );
+			wp_redirect( $url, 302, 'WP Updater' );
 			exit;
 		}
 
